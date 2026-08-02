@@ -9,13 +9,17 @@ from Monzo, Trade Republic and Trading 212.
 
 ## Decisions & trade-offs
 
-- **Bank connectivity: GoCardless Bank Account Data** (built into the Data
-  Importer, free tier) rather than SaltEdge or per-bank custom API scripts.
-  Monzo is covered; Trade Republic via its German banking licence where listed;
-  Trading 212 is not a PSD2 payment bank, so it uses CSV export + saved import
-  config. Alternative considered: custom sync scripts against the Trading 212
-  and Trade Republic APIs — rejected for maintenance cost; can be added later
-  without changing this stack.
+- **Bank connectivity** (revised 2026-08-02 after research): GoCardless Bank
+  Account Data closed to new registrations July 2025; Salt Edge free tier ended
+  Oct 2025. Enable Banking (free restricted mode) is the importer's new free
+  provider but covers none of the three target banks (institution list checked
+  directly). Chosen paths: Monzo + Trading 212 via **Lunch Flow** (paid
+  aggregator, ~$35/yr, native importer support) or free CSV flows; Trade
+  Republic via **pytr/tr-api** CSV export (unofficial, fragile since mid-2026
+  WAF rate-limiting) or manual export. Trading 212 also has an official public
+  API (beta, Invest/ISA only) usable for a DIY sync later. The compose file
+  carries env vars for Enable Banking, Lunch Flow and legacy GoCardless so any
+  of these work without stack changes.
 - **Database: MariaDB** (upstream's default compose choice) over Postgres —
   either works; MariaDB keeps parity with official docs.
 - **Coolify-first compose**: no published host ports; `SERVICE_FQDN_*` magic

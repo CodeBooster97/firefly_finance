@@ -36,27 +36,34 @@ Firefly III: <http://localhost:8080> · Importer: <http://localhost:8081>
 
 ## Linking the banks
 
-The Data Importer talks to banks through **GoCardless Bank Account Data** (formerly Nordigen) — free for up to 50 connected accounts.
+> **State of play (verified Aug 2026):** the two providers that used to be the free defaults are gone — **GoCardless Bank Account Data stopped accepting new registrations in July 2025**, and **Salt Edge ended free-tier access in Oct 2025** (support is being removed from the importer). The importer's current providers are Enable Banking, Lunch Flow, GoCardless (existing accounts only), FinTS, SimpleFIN, teller.io, basiq and Sophtron — but of these, **none of the free ones cover Monzo, Trade Republic or Trading 212** (Enable Banking's institution list was checked directly: none of the three are on it). The realistic options per bank are below.
 
-**One-time setup:**
-
-1. Create an account at <https://bankaccountdata.gocardless.com> (this is the *Bank Account Data* portal, not regular GoCardless payments).
-2. Create a **User secret** → set `NORDIGEN_ID` (secret ID) and `NORDIGEN_KEY` (secret key) in Coolify and redeploy.
-3. In Firefly III, create your asset accounts (e.g. "Monzo", "Trade Republic", "Trading 212") with the right currencies, so imports have somewhere to land.
+Before importing anything, create the asset accounts in Firefly III ("Monzo", "Trade Republic", "Trading 212") with the right currencies.
 
 ### Monzo 🇬🇧
 
-Fully supported via GoCardless. In the importer: *Import from GoCardless* → country **United Kingdom** → **Monzo** → approve in the Monzo app → map the account to your Firefly III "Monzo" asset account. Bank consent lasts ~90 days, then you re-approve.
+- **Recommended — Lunch Flow** (`LUNCH_FLOW_API_KEY`): paid aggregator (~$35/year) with native Data Importer support; it connects Monzo through its own commercial GoCardless agreement, so the signup closure doesn't affect it. Sign up at [lunchflow.app](https://lunchflow.app), add Monzo as a connection, create an *API destination*, put the key in Coolify. Fully automatable.
+- **Free — CSV**: Monzo app → *Export & statements* → CSV monthly, imported via the importer's file workflow with a saved config from [import-configs/](import-configs/README.md).
+- **DIY — Monzo Developer API**: [developers.monzo.com](https://developers.monzo.com) gives a personal access token to your own account; note the SCA rule — beyond 5 minutes after auth you can only fetch the last 90 days, so a sync script must run regularly.
 
 ### Trade Republic 🇩🇪
 
-Trade Republic is a licensed German bank; look for it in the importer under country **Germany**. Note that open-banking access covers the **cash account** — individual securities trades typically show up only as the cash movements they cause.
+**No aggregator covers it** (checked: not on Enable Banking, not on Lunch Flow; the GoCardless connection is closed to new users). Options:
 
-If it's missing from the GoCardless list (coverage changes over time), the reliable fallback is [pytr](https://github.com/pytr-org/pytr), which exports your Trade Republic history to CSV for the importer's CSV workflow.
+- **[pytr](https://github.com/pytr-org/pytr)** (unofficial API client): `pytr export_transactions` produces CSV the importer handles. Caveat: it's reverse-engineered — in mid-2026 Trade Republic's AWS-WAF bot protection started rate-limiting pytr's login; [tr-api](https://github.com/cdamken/tr-api) is a newer client that works around this via browser-cookie reuse or push-approval login. Expect occasional breakage; run it on your own machine, not unattended on the server.
+- **Manual**: monthly statement/CSV from the app → file import.
 
 ### Trading 212
 
-Trading 212 is an investment platform, not a PSD2 payment bank, so it is generally **not** available through open banking. Use its built-in export instead: in Trading 212 go to *History → Export* (CSV, choose your date range) and run it through the importer's **File import**. On the first run, map the columns and accounts, then download the generated **import configuration JSON** and save it in [import-configs/](import-configs/README.md) so subsequent imports are one click (or fully automated, below).
+Trading 212 has an **official public API** (beta) — the only one of the three with first-party API access. Key facts (from [docs.trading212.com/api](https://docs.trading212.com/api)): Invest and Stocks ISA accounts only (no CFD), API key generated in the app (*Settings → API*), HTTP Basic auth (`key:secret` base64), live env `https://live.trading212.com/api/v0`, plus a demo env. Relevant endpoints: order/dividend/transaction history and **CSV report exports** (`POST /history/exports` → poll for a `downloadLink`).
+
+- **Simplest**: *History → Export* CSV from the app → importer file workflow with a saved config.
+- **Automated**: Lunch Flow also covers Trading 212 (via SnapTrade), same subscription as Monzo — making one provider cover two of your three banks.
+- **DIY**: a small cron script calling the exports endpoint and POSTing the CSV to the importer's `/autoupload` — possible later without changing this stack.
+
+### If you have a pre-2025 GoCardless account
+
+Set `NORDIGEN_ID`/`NORDIGEN_KEY` and the GoCardless flow still works (Monzo is on it; Trade Republic was too). Existing accounts keep working for now, but treat it as borrowed time.
 
 > Firefly III tracks money, not portfolio positions — for all three, imports represent deposits, withdrawals, fees and trade cash flows, not live stock valuations.
 
@@ -74,10 +81,10 @@ Two levels of automation:
      wget -qO- "http://localhost:8080/autoimport?directory=/import&secret=YOUR_AUTO_IMPORT_SECRET"
      ```
 
-   This works well for the GoCardless connections (Monzo, Trade Republic). Trading 212 stays semi-manual since it needs a fresh CSV each time.
+   This works well for API-backed connections (e.g. Lunch Flow). CSV-based flows (Trade Republic via pytr, manual Trading 212 exports) stay semi-manual since they need a fresh file each time.
 
 ## Maintenance
 
 - **Upgrades**: images track `latest`; redeploying in Coolify pulls new versions. Firefly III migrates its database automatically. Check the [release notes](https://github.com/firefly-iii/firefly-iii/releases) before major-version jumps.
 - **Backups**: snapshot the `firefly_iii_db` and `firefly_iii_upload` volumes (Coolify's backup feature or `mariadb-dump` on a schedule).
-- **Consent renewal**: GoCardless bank consents expire after ~90 days per bank — the importer will tell you when a connection needs re-authorising.
+- **Consent renewal**: open-banking consents (Lunch Flow/GoCardless/Enable Banking) expire after ~90 days per bank — re-authorise when the importer or provider dashboard flags it.

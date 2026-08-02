@@ -48,7 +48,13 @@ services:
       - VANITY_URL=${APP_URL:-http://localhost:8080}
       # Personal Access Token from Firefly III (Profile -> OAuth). Can also be pasted in the UI.
       - FIREFLY_III_ACCESS_TOKEN=${FIREFLY_III_ACCESS_TOKEN:-}
-      # GoCardless Bank Account Data credentials (bankaccountdata.gocardless.com)
+      # Enable Banking (free restricted mode) - see README "Linking the banks"
+      - ENABLE_BANKING_APP_ID=${ENABLE_BANKING_APP_ID:-}
+      - ENABLE_BANKING_PRIVATE_KEY=${ENABLE_BANKING_PRIVATE_KEY:-}
+      # Lunch Flow (paid aggregator, covers Monzo + Trading 212)
+      - LUNCH_FLOW_API_KEY=${LUNCH_FLOW_API_KEY:-}
+      # GoCardless Bank Account Data - closed to new signups since July 2025;
+      # only useful if you already have an account there
       - NORDIGEN_ID=${NORDIGEN_ID:-}
       - NORDIGEN_KEY=${NORDIGEN_KEY:-}
       # Optional: enables the /autoupload and /autoimport endpoints for scheduled imports
