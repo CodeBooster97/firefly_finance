@@ -19,7 +19,7 @@ services:
       - APP_ENV=production
       - APP_DEBUG=false
       - APP_KEY=${APP_KEY:?Set APP_KEY to exactly 32 random characters}
-      - APP_URL=${APP_URL:-http://localhost:8080}
+      - APP_URL=${APP_URL:-https://finance.heimr.tech}
       - TRUSTED_PROXIES=*
       - SITE_OWNER=${SITE_OWNER:-mail@example.com}
       - TZ=${TZ:-Europe/London}
@@ -44,8 +44,11 @@ services:
       - SERVICE_FQDN_IMPORTER_8080
       # Internal URL the importer uses to talk to Firefly III over the Docker network
       - FIREFLY_III_URL=http://app:8080
-      # Public URL of Firefly III, used for links shown in the importer UI
-      - VANITY_URL=${APP_URL:-http://localhost:8080}
+      # Public URL of Firefly III, used for browser redirects (OAuth) and links
+      - VANITY_URL=${APP_URL:-https://finance.heimr.tech}
+      # Public URL of the importer itself + proxy trust, so redirects use https
+      - APP_URL=${IMPORTER_APP_URL:-https://finance-importer.heimr.tech}
+      - TRUSTED_PROXIES=**
       # Personal Access Token from Firefly III (Profile -> OAuth). Can also be pasted in the UI.
       - FIREFLY_III_ACCESS_TOKEN=${FIREFLY_III_ACCESS_TOKEN:-}
       # Enable Banking (free restricted mode) - see README "Linking the banks"
