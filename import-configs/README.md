@@ -15,8 +15,11 @@ Automated pull from the Google Sheet (Coolify Scheduled Task on the
 `CAN_POST_AUTOIMPORT=true` and `FIREFLY_III_ACCESS_TOKEN` to be set):
 
 ```
-curl -s "https://docs.google.com/spreadsheets/d/<SHEET_ID>/export?format=csv&gid=<GID>" -o /tmp/monzo.csv && curl -s -X POST "http://localhost:8080/autoupload?secret=$AUTO_IMPORT_SECRET" -F "importable=@/tmp/monzo.csv" -F "json=@/import/monzo.json"
+curl -s "https://docs.google.com/spreadsheets/d/<SHEET_ID>/export?format=csv&gid=<GID>" -o /tmp/monzo.csv && grep -vE ',-?0\.00,GBP,' /tmp/monzo.csv > /tmp/monzo_clean.csv && curl -s -X POST "http://localhost:8080/autoupload?secret=$AUTO_IMPORT_SECRET" -F "importable=@/tmp/monzo_clean.csv" -F "json=@/import/monzo.json"
 ```
+
+The `grep` strips Monzo's zero-amount rows (card authorisation checks) —
+Firefly III rejects transactions with amount 0, so they'd error on every run.
 
 Store Firefly III Data Importer JSON configuration files here. After you run an
 import once through the importer UI, it offers the configuration as a JSON
