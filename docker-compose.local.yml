@@ -1,0 +1,13 @@
+# Local testing override: publishes ports on the host.
+# Usage: docker compose -f docker-compose.yml -f docker-compose.local.yml up -d
+#
+# Firefly III:    http://localhost:8080
+# Data Importer:  http://localhost:8081
+
+services:
+  app:
+    ports:
+      - "8080:8080"
+  importer:
+    ports:
+      - "8081:8080"

@@ -1,0 +1,92 @@
+# Firefly III + Data Importer, designed for deployment via Coolify (Docker Compose resource).
+#
+# - No host ports are published here; Coolify's proxy routes traffic to the
+#   container ports declared via the SERVICE_FQDN_* magic variables below.
+#   For local testing, add the override file: docker-compose.local.yml
+# - All ${VARS} are configurable in Coolify's Environment Variables UI,
+#   or via a .env file locally (see .env.example).
+
+services:
+  app:
+    image: fireflyiii/core:latest
+    restart: always
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      # Coolify magic var: assigns a public domain routed to this service on port 8080
+      - SERVICE_FQDN_APP_8080
+      - APP_ENV=production
+      - APP_DEBUG=false
+      - APP_KEY=${APP_KEY:?Set APP_KEY to exactly 32 random characters}
+      - APP_URL=${APP_URL:-http://localhost:8080}
+      - TRUSTED_PROXIES=*
+      - SITE_OWNER=${SITE_OWNER:-mail@example.com}
+      - TZ=${TZ:-Europe/London}
+      - DEFAULT_LANGUAGE=${DEFAULT_LANGUAGE:-en_GB}
+      - DB_CONNECTION=mysql
+      - DB_HOST=db
+      - DB_PORT=3306
+      - DB_DATABASE=${DB_DATABASE:-firefly}
+      - DB_USERNAME=${DB_USERNAME:-firefly}
+      - DB_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD}
+      - STATIC_CRON_TOKEN=${STATIC_CRON_TOKEN:?Set STATIC_CRON_TOKEN to exactly 32 random characters}
+    volumes:
+      - firefly_iii_upload:/var/www/html/storage/upload
+
+  importer:
+    image: fireflyiii/data-importer:latest
+    restart: always
+    depends_on:
+      - app
+    environment:
+      # Coolify magic var: assigns a public domain routed to this service on port 8080
+      - SERVICE_FQDN_IMPORTER_8080
+      # Internal URL the importer uses to talk to Firefly III over the Docker network
+      - FIREFLY_III_URL=http://app:8080
+      # Public URL of Firefly III, used for links shown in the importer UI
+      - VANITY_URL=${APP_URL:-http://localhost:8080}
+      # Personal Access Token from Firefly III (Profile -> OAuth). Can also be pasted in the UI.
+      - FIREFLY_III_ACCESS_TOKEN=${FIREFLY_III_ACCESS_TOKEN:-}
+      # GoCardless Bank Account Data credentials (bankaccountdata.gocardless.com)
+      - NORDIGEN_ID=${NORDIGEN_ID:-}
+      - NORDIGEN_KEY=${NORDIGEN_KEY:-}
+      # Optional: enables the /autoupload and /autoimport endpoints for scheduled imports
+      - AUTO_IMPORT_SECRET=${AUTO_IMPORT_SECRET:-}
+      - CAN_POST_AUTOIMPORT=${CAN_POST_AUTOIMPORT:-false}
+      - CAN_POST_FILES=${CAN_POST_FILES:-false}
+      - IMPORT_DIR_ALLOWLIST=/import
+      - TZ=${TZ:-Europe/London}
+    volumes:
+      - ./import-configs:/import
+
+  db:
+    image: mariadb:lts
+    restart: always
+    environment:
+      - MYSQL_RANDOM_ROOT_PASSWORD=yes
+      - MYSQL_DATABASE=${DB_DATABASE:-firefly}
+      - MYSQL_USER=${DB_USERNAME:-firefly}
+      - MYSQL_PASSWORD=${DB_PASSWORD:?Set DB_PASSWORD}
+    volumes:
+      - firefly_iii_db:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  # Fires Firefly III's internal cron once a day (recurring transactions, budgets, etc.)
+  cron:
+    image: alpine:3.20
+    restart: always
+    depends_on:
+      - app
+    environment:
+      - STATIC_CRON_TOKEN=${STATIC_CRON_TOKEN:?Set STATIC_CRON_TOKEN to exactly 32 random characters}
+    command: 'sh -c "echo \"0 3 * * * wget -qO- http://app:8080/api/v1/cron/$$STATIC_CRON_TOKEN\" | crontab - && crond -f -L /dev/stdout"'
+
+volumes:
+  firefly_iii_upload:
+  firefly_iii_db:
